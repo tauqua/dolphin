@@ -1368,7 +1368,7 @@ void TextureCacheBase::CopyRenderTargetToTexture(u32 dstAddr, unsigned int dstFo
 
     if (entry)
     {
-      entry->SetGeneralParameters(dstAddr, 0, baseFormat);
+      entry->SetGeneralParameters(dstAddr, 0, dstFormat);
       entry->SetDimensions(tex_w, tex_h, 1);
 
       entry->frameCount = FRAMECOUNT_INVALID;
