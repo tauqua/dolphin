@@ -151,6 +151,7 @@ private:
   void ShowFreeLookWindow();
   void ShowAboutDialog();
   void ShowHotkeyDialog();
+  void ShowGrandSettingsDialog();
   void ShowNetPlaySetupDialog();
   void ShowNetPlayBrowser();
   void ShowFIFOPlayer();

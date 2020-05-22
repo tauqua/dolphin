@@ -28,6 +28,8 @@ add_executable(dolphin-emu
   FIFO/FIFOPlayerWindow.h
   FIFO/FIFOAnalyzer.cpp
   FIFO/FIFOAnalyzer.h
+  GrandSettingsWindow.cpp
+  GrandSettingsWindow.h
   Host.cpp
   Host.h
   HotkeyScheduler.cpp
