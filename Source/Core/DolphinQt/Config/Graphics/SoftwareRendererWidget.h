@@ -7,7 +7,7 @@
 #include "DolphinQt/Config/Graphics/GraphicsWidget.h"
 
 class GraphicsBool;
-class GraphicsWindow;
+class GraphicsDialog;
 class QSpinBox;
 class ToolTipComboBox;
 
@@ -15,7 +15,7 @@ class SoftwareRendererWidget final : public GraphicsWidget
 {
   Q_OBJECT
 public:
-  explicit SoftwareRendererWidget(GraphicsWindow* parent);
+  explicit SoftwareRendererWidget(GraphicsDialog* parent);
 
 signals:
   void BackendChanged(const QString& backend);

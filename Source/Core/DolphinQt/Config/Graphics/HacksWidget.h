@@ -7,7 +7,7 @@
 #include "DolphinQt/Config/Graphics/GraphicsWidget.h"
 
 class GraphicsBool;
-class GraphicsWindow;
+class GraphicsDialog;
 class QLabel;
 class ToolTipSlider;
 
@@ -15,7 +15,7 @@ class HacksWidget final : public GraphicsWidget
 {
   Q_OBJECT
 public:
-  explicit HacksWidget(GraphicsWindow* parent);
+  explicit HacksWidget(GraphicsDialog* parent);
 
 private:
   void LoadSettings() override;
