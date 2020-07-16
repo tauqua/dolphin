@@ -24,6 +24,8 @@
 #include "VideoCommon/CommandProcessor.h"
 #include "VideoCommon/DataReader.h"
 #include "VideoCommon/Fifo.h"
+#include "VideoCommon/PostProcessing.h"
+#include "VideoCommon/RenderBase.h"
 #include "VideoCommon/Statistics.h"
 #include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/XFMemory.h"
@@ -33,6 +35,18 @@ namespace OpcodeDecoder
 namespace
 {
 bool s_is_fifo_error_seen = false;
+bool s_previous_command_drew = false;
+
+void update_drawing(bool is_drawing_command)
+{
+  if (s_previous_command_drew != is_drawing_command)
+  {
+    auto* post_processing = g_renderer->GetPostProcessing();
+    if (post_processing)
+      post_processing->OnOpcodeDrawingStateChanged(is_drawing_command);
+  }
+  s_previous_command_drew = is_drawing_command;
+}
 
 u32 InterpretDisplayList(u32 address, u32 size)
 {
@@ -126,6 +140,8 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
       LoadCPReg(sub_cmd, value, is_preprocess);
       if constexpr (!is_preprocess)
         INCSTAT(g_stats.this_frame.num_cp_loads);
+
+      update_drawing(false);
     }
     break;
 
@@ -148,6 +164,7 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
 
         INCSTAT(g_stats.this_frame.num_xf_loads);
       }
+      update_drawing(false);
       src.Skip<u32>(transfer_size);
     }
     break;
@@ -173,6 +190,8 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
         PreprocessIndexedXF(src.Read<u32>(), ref_array);
       else
         LoadIndexedXF(src.Read<u32>(), ref_array);
+
+      update_drawing(false);
     }
     break;
 
@@ -229,6 +248,8 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
           LoadBPReg(bp_cmd);
           INCSTAT(g_stats.this_frame.num_bp_loads);
         }
+
+        update_drawing(false);
       }
       break;
 
@@ -252,6 +273,8 @@ u8* Run(DataReader src, u32* cycles, bool in_display_list)
 
         // 4 GPU ticks per vertex, 3 CPU ticks per GPU tick
         total_cycles += num_vertices * 4 * 3 + 6;
+
+        update_drawing(true);
       }
       else
       {

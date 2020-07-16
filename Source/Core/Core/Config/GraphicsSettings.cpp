@@ -106,8 +106,8 @@ const Info<bool> GFX_PREFER_GLES{{System::GFX, "Settings", "PreferGLES"}, false}
 const Info<bool> GFX_ENHANCE_FORCE_FILTERING{{System::GFX, "Enhancements", "ForceFiltering"},
                                              false};
 const Info<int> GFX_ENHANCE_MAX_ANISOTROPY{{System::GFX, "Enhancements", "MaxAnisotropy"}, 0};
-const Info<std::string> GFX_ENHANCE_POST_SHADER{
-    {System::GFX, "Enhancements", "PostProcessingShader"}, ""};
+const Info<std::string> GFX_ENHANCE_CUSTOM_SHADER_PRESET{
+    {System::GFX, "Enhancements", "CustomShaderPreset"}, ""};
 const Info<bool> GFX_ENHANCE_FORCE_TRUE_COLOR{{System::GFX, "Enhancements", "ForceTrueColor"},
                                               true};
 const Info<bool> GFX_ENHANCE_DISABLE_COPY_FILTER{{System::GFX, "Enhancements", "DisableCopyFilter"},

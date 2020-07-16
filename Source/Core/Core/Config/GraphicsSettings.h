@@ -86,7 +86,7 @@ extern const Info<bool> GFX_PREFER_GLES;
 
 extern const Info<bool> GFX_ENHANCE_FORCE_FILTERING;
 extern const Info<int> GFX_ENHANCE_MAX_ANISOTROPY;  // NOTE - this is x in (1 << x)
-extern const Info<std::string> GFX_ENHANCE_POST_SHADER;
+extern const Info<std::string> GFX_ENHANCE_CUSTOM_SHADER_PRESET;
 extern const Info<bool> GFX_ENHANCE_FORCE_TRUE_COLOR;
 extern const Info<bool> GFX_ENHANCE_DISABLE_COPY_FILTER;
 extern const Info<bool> GFX_ENHANCE_ARBITRARY_MIPMAP_DETECTION;

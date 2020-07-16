@@ -353,6 +353,7 @@ private:
     bool gpu_texture_decoding;
     bool disable_vram_copies;
     bool arbitrary_mipmap_detection;
+    u64 texture_shader_change_count = 0;
   };
   BackupConfig backup_config = {};
 

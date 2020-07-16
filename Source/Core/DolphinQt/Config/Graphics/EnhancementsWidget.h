@@ -6,6 +6,7 @@
 
 #include "DolphinQt/Config/Graphics/GraphicsWidget.h"
 
+class CustomShaderWindow;
 class GraphicsBool;
 class GraphicsChoice;
 class GraphicsSlider;
@@ -29,15 +30,12 @@ private:
   void CreateWidgets();
   void ConnectWidgets();
   void AddDescriptions();
-  void ConfigurePostProcessingShader();
-  void LoadPPShaders();
 
   // Enhancements
   GraphicsChoice* m_ir_combo;
   ToolTipComboBox* m_aa_combo;
   GraphicsChoice* m_af_combo;
-  ToolTipComboBox* m_pp_effect;
-  QPushButton* m_configure_pp_effect;
+  QPushButton* m_configure_custom_shaders;
   GraphicsBool* m_scaled_efb_copy;
   GraphicsBool* m_per_pixel_lighting;
   GraphicsBool* m_force_texture_filtering;
@@ -46,6 +44,7 @@ private:
   GraphicsBool* m_force_24bit_color;
   GraphicsBool* m_disable_copy_filter;
   GraphicsBool* m_arbitrary_mipmap_detection;
+  CustomShaderWindow* m_custom_shader_window;
 
   // Stereoscopy
   GraphicsChoice* m_3d_mode;

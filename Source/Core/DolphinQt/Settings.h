@@ -151,6 +151,7 @@ public:
 
 signals:
   void ConfigChanged();
+  void ShaderConfigLoaded();
   void EmulationStateChanged(Core::State new_state);
   void ThemeChanged();
   void PathAdded(const QString&);

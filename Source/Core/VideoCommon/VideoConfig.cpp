@@ -3,9 +3,12 @@
 // Refer to the license.txt file included.
 
 #include <algorithm>
+#include <vector>
 
 #include "Common/CPUDetect.h"
+#include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
+#include "Common/FileUtil.h"
 #include "Common/StringUtil.h"
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/ConfigManager.h"
@@ -17,7 +20,26 @@
 
 VideoConfig g_Config;
 VideoConfig g_ActiveConfig;
-static bool s_has_registered_callback = false;
+
+namespace
+{
+bool s_has_registered_callback = false;
+std::vector<ShaderConfigChangedCallback> s_shader_loaded_callbacks;
+std::string s_last_loaded_shader;
+
+void TriggerShadedLoadedCallbacks()
+{
+  for (auto& callback : s_shader_loaded_callbacks)
+  {
+    callback();
+  }
+}
+
+std::string DefaultShaderProfile()
+{
+  return File::GetUserPath(D_CONFIG_IDX) + "DefaultPostProcessingPreset.ini";
+}
+}
 
 static bool IsVSyncActive(bool enabled)
 {
@@ -30,11 +52,22 @@ void UpdateActiveConfig()
 {
   if (Movie::IsPlayingInput() && Movie::IsConfigSaved())
     Movie::SetGraphicsConfig();
+
   g_ActiveConfig = g_Config;
   g_ActiveConfig.bVSyncActive = IsVSyncActive(g_ActiveConfig.bVSync);
 }
 
+void AddShaderConfigLoadedCallback(ShaderConfigChangedCallback func)
+{
+  s_shader_loaded_callbacks.emplace_back(std::move(func));
+
+  if (s_last_loaded_shader != "")
+    TriggerShadedLoadedCallbacks();
+}
+
 VideoConfig::VideoConfig()
+    : shader_config_efb("EFB"), shader_config_xfb("XFB"), shader_config_post_process("PostProcess"),
+      shader_config_textures("Textures"), shader_config_downsample("Downsample")
 {
   // Needed for the first frame, I think
   fAspectRatioHackW = 1;
@@ -55,6 +88,8 @@ VideoConfig::VideoConfig()
 #else
   bBackendMultithreading = true;
 #endif
+
+  LoadCustomShaderPreset(DefaultShaderProfile());
 }
 
 void VideoConfig::Refresh()
@@ -129,12 +164,12 @@ void VideoConfig::Refresh()
 
   bForceFiltering = Config::Get(Config::GFX_ENHANCE_FORCE_FILTERING);
   iMaxAnisotropy = Config::Get(Config::GFX_ENHANCE_MAX_ANISOTROPY);
-  sPostProcessingShader = Config::Get(Config::GFX_ENHANCE_POST_SHADER);
   bForceTrueColor = Config::Get(Config::GFX_ENHANCE_FORCE_TRUE_COLOR);
   bDisableCopyFilter = Config::Get(Config::GFX_ENHANCE_DISABLE_COPY_FILTER);
   bArbitraryMipmapDetection = Config::Get(Config::GFX_ENHANCE_ARBITRARY_MIPMAP_DETECTION);
   fArbitraryMipmapDetectionThreshold =
       Config::Get(Config::GFX_ENHANCE_ARBITRARY_MIPMAP_DETECTION_THRESHOLD);
+  custom_shader_preset = Config::Get(Config::GFX_ENHANCE_CUSTOM_SHADER_PRESET);
 
   stereo_mode = Config::Get(Config::GFX_STEREO_MODE);
   iStereoDepth = Config::Get(Config::GFX_STEREO_DEPTH);
@@ -222,4 +257,62 @@ u32 VideoConfig::GetShaderPrecompilerThreads() const
     return static_cast<u32>(iShaderPrecompilerThreads);
   else
     return GetNumAutoShaderCompilerThreads();
+}
+
+void VideoConfig::UpdateDownsampleShader()
+{
+  shader_config_downsample.ClearShaders();
+
+  // Hack, sets "valid" to true
+  shader_config_downsample.LoadFromFile("");
+
+  std::vector<u32> indices;
+  for (int i = iEFBScale; i > 2; i--)
+  {
+    shader_config_downsample.AddShader(File::GetSysDirectory() + SHADERS_DIR + DIR_SEP + "Scaling" +
+                                       DIR_SEP + "bicubic.glsl");
+    u32 index = shader_config_downsample.GetShaderCount() - 1;
+    shader_config_downsample.GetShader(index).SetEnabled(true);
+    indices.push_back(index);
+  }
+  shader_config_downsample.SetShaderIndices(indices);
+}
+
+void VideoConfig::LoadCustomShaderPresetFromConfig(bool fallback_to_default)
+{
+  std::string shader_preset = custom_shader_preset;
+  if (shader_preset.empty())
+  {
+    if (!fallback_to_default)
+      return;
+
+    shader_preset = DefaultShaderProfile();
+  }
+
+  LoadCustomShaderPreset(shader_preset);
+}
+
+void VideoConfig::LoadCustomShaderPreset(const std::string& file_path)
+{
+  shader_config_efb.LoadFromFile(file_path);
+  shader_config_xfb.LoadFromFile(file_path);
+  shader_config_post_process.LoadFromFile(file_path);
+  shader_config_textures.LoadFromFile(file_path);
+
+  s_last_loaded_shader = file_path;
+
+  TriggerShadedLoadedCallbacks();
+}
+
+void VideoConfig::SaveCustomShaderPresetDefault()
+{
+  SaveCustomShaderPreset(DefaultShaderProfile());
+}
+
+void VideoConfig::SaveCustomShaderPreset(const std::string& file_path)
+{
+  shader_config_efb.SaveToFile(file_path);
+  shader_config_xfb.SaveToFile(file_path);
+  shader_config_post_process.SaveToFile(file_path);
+  shader_config_textures.SaveToFile(file_path);
 }

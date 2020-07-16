@@ -40,6 +40,7 @@
 #include "VideoCommon/HiresTextures.h"
 #include "VideoCommon/OpcodeDecoding.h"
 #include "VideoCommon/PixelShaderManager.h"
+#include "VideoCommon/PostProcessing.h"
 #include "VideoCommon/RenderBase.h"
 #include "VideoCommon/SamplerCommon.h"
 #include "VideoCommon/ShaderCache.h"
@@ -163,7 +164,9 @@ void TextureCacheBase::OnConfigChanged(const VideoConfig& config)
       config.bHiresTextures != backup_config.hires_textures ||
       config.bEnableGPUTextureDecoding != backup_config.gpu_texture_decoding ||
       config.bDisableCopyToVRAM != backup_config.disable_vram_copies ||
-      config.bArbitraryMipmapDetection != backup_config.arbitrary_mipmap_detection)
+      config.bArbitraryMipmapDetection != backup_config.arbitrary_mipmap_detection ||
+      (config.shader_config_textures.IsValid() && (config.shader_config_textures.GetChangeCount() !=
+                                                   backup_config.texture_shader_change_count)))
   {
     Invalidate();
     TexDecoder_SetTexFmtOverlayOptions(config.bTexFmtOverlayEnable, config.bTexFmtOverlayCenter);
@@ -258,6 +261,7 @@ void TextureCacheBase::SetBackupConfig(const VideoConfig& config)
   backup_config.gpu_texture_decoding = config.bEnableGPUTextureDecoding;
   backup_config.disable_vram_copies = config.bDisableCopyToVRAM;
   backup_config.arbitrary_mipmap_detection = config.bArbitraryMipmapDetection;
+  backup_config.texture_shader_change_count = config.shader_config_textures.GetChangeCount();
 }
 
 TextureCacheBase::TCacheEntry*
@@ -402,9 +406,12 @@ void TextureCacheBase::ScaleTextureCacheEntryTo(TextureCacheBase::TCacheEntry* e
   }
 
   // No need to convert the coordinates here since they'll be the same.
+  g_renderer->BeginUtilityDrawing();
   g_renderer->ScaleTexture(new_texture->framebuffer.get(),
                            new_texture->texture->GetConfig().GetRect(), entry->texture.get(),
                            entry->texture->GetConfig().GetRect());
+  new_texture->texture->FinishedRendering();
+  g_renderer->EndUtilityDrawing();
   entry->texture.swap(new_texture->texture);
   entry->framebuffer.swap(new_texture->framebuffer);
 
@@ -1694,6 +1701,33 @@ TextureCacheBase::GetTexture(u32 address, u32 width, u32 height, const TextureFo
   INCSTAT(g_stats.num_textures_uploaded);
   SETSTAT(g_stats.num_textures_alive, static_cast<int>(textures_by_address.size()));
 
+  auto* post_processing = g_renderer->GetPostProcessing();
+  if (post_processing && post_processing->IsTextureValid())
+  {
+    TextureConfig new_config{config};
+    new_config.height *= 4;
+    new_config.width *= 4;
+    new_config.flags = AbstractTextureFlag_RenderTarget;
+    TCacheEntry* upressed_entry = AllocateCacheEntry(new_config);
+    if (upressed_entry)
+    {
+      const MathUtil::Rectangle<int> src_tex_rect = entry->texture->GetConfig().GetRect();
+      const MathUtil::Rectangle<int> dst_tex_rect = upressed_entry->texture->GetConfig().GetRect();
+
+      g_renderer->BeginUtilityDrawing();
+      post_processing->ApplyTextures(upressed_entry->framebuffer.get(), dst_tex_rect,
+                                     entry->texture.get(), src_tex_rect, 0);
+      g_renderer->EndUtilityDrawing();
+
+      entry->texture.swap(upressed_entry->texture);
+      entry->framebuffer.swap(upressed_entry->framebuffer);
+
+      auto the_config = upressed_entry->texture->GetConfig();
+      texture_pool.emplace(the_config, TexPoolEntry(std::move(upressed_entry->texture),
+                                                    std::move(upressed_entry->framebuffer)));
+    }
+  }
+
   entry = DoPartialTextureUpdates(iter->second, &texMem[tlutaddr], tlutfmt);
 
   // This should only be needed if the texture was updated, or used GPU decoding.
@@ -2154,6 +2188,35 @@ void TextureCacheBase::CopyRenderTargetToTexture(
   //       complex down filtering to average all pixels and produce the correct result.
   const bool linear_filter =
       !is_depth_copy && (scaleByHalf || g_renderer->GetEFBScale() != 1 || y_scale > 1.0f);
+
+  if (is_xfb_copy)
+  {
+    if (!is_depth_copy && !isIntensity)
+    {
+      g_renderer->GetPostProcessing()->OnFrameEnd(srcRect);
+      if (g_renderer->GetPostProcessing()->IsXFBValid())
+      {
+        const auto scaled_src_rect = g_renderer->ConvertEFBRectangle(srcRect);
+        const auto framebuffer_rect = g_renderer->ConvertFramebufferRectangle(
+            scaled_src_rect, g_framebuffer_manager->GetEFBFramebuffer());
+
+        g_renderer->GetPostProcessing()->ApplyXFB(
+            g_framebuffer_manager->GetEFBFramebuffer(),
+            g_framebuffer_manager->GetEFBFramebuffer()->GetRect(),
+            g_framebuffer_manager->ResolveEFBColorTexture(framebuffer_rect),
+            g_framebuffer_manager->ResolveEFBDepthTexture(framebuffer_rect), framebuffer_rect, 0);
+      }
+    }
+  }
+  else
+  {
+    g_renderer->GetPostProcessing()->OnEFBTriggered();
+    if (!is_depth_copy && !isIntensity && static_cast<u32>(dstFormat) >= 4 &&
+        static_cast<u32>(dstFormat) <= 6)
+    {
+      // g_renderer->GetPostProcessing()->OnEFBWritten(srcRect);
+    }
+  }
 
   TCacheEntry* entry = nullptr;
   if (copy_to_vram)
@@ -2671,6 +2734,21 @@ void TextureCacheBase::CopyEFBToCacheEntry(TCacheEntry* entry, bool is_depth_cop
       is_depth_copy ? g_framebuffer_manager->ResolveEFBDepthTexture(framebuffer_rect) :
                       g_framebuffer_manager->ResolveEFBColorTexture(framebuffer_rect);
 
+  //const float width = scale_by_half ? entry->native_width * 2 : entry->native_width;
+
+  /*auto* post_processing = g_renderer->GetPostProcessing();
+  if (g_renderer->GetEFBScale() > 2 && post_processing->IsDownsampleValid() &&
+      !entry->is_xfb_copy && linear_filter)
+  {
+    g_renderer->BeginUtilityDrawing();
+    post_processing->ApplyDownsample(g_framebuffer_manager->GetEFBFramebuffer(),
+                                     g_framebuffer_manager->GetEFBFramebuffer()->GetRect(),
+                                     src_texture, src_texture->GetRect(), 0);
+    g_renderer->EndUtilityDrawing();
+
+    src_texture = g_framebuffer_manager->ResolveEFBColorTexture(framebuffer_rect);
+  }*/
+
   src_texture->FinishedRendering();
   g_renderer->BeginUtilityDrawing();
 
@@ -2738,6 +2816,19 @@ void TextureCacheBase::CopyEFB(AbstractStagingTexture* dst, const EFBCopyParams&
   AbstractTexture* src_texture =
       params.depth ? g_framebuffer_manager->ResolveEFBDepthTexture(framebuffer_rect) :
                      g_framebuffer_manager->ResolveEFBColorTexture(framebuffer_rect);
+
+  auto* post_processing = g_renderer->GetPostProcessing();
+  if (g_renderer->GetEFBScale() > 2 && linear_filter && post_processing->IsDownsampleValid())
+  {
+    g_renderer->BeginUtilityDrawing();
+    post_processing->ApplyDownsample(g_framebuffer_manager->GetEFBFramebuffer(),
+                                     g_framebuffer_manager->GetEFBFramebuffer()->GetRect(),
+                                     src_texture, src_texture->GetRect(), 0);
+    g_renderer->EndUtilityDrawing();
+
+    src_texture = params.depth ? g_framebuffer_manager->ResolveEFBDepthTexture(framebuffer_rect) :
+                                 g_framebuffer_manager->ResolveEFBColorTexture(framebuffer_rect);
+  }
 
   src_texture->FinishedRendering();
   g_renderer->BeginUtilityDrawing();

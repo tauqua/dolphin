@@ -272,6 +272,8 @@ MainWindow::MainWindow(std::unique_ptr<BootParameters> boot_parameters,
 
 MainWindow::~MainWindow()
 {
+  g_Config.SaveCustomShaderPresetDefault();
+
   // Shut down NetPlay first to avoid race condition segfault
   Settings::Instance().ResetNetPlayClient();
   Settings::Instance().ResetNetPlayServer();

@@ -17,6 +17,7 @@
 #include "VideoCommon/AbstractTexture.h"
 #include "VideoCommon/DriverDetails.h"
 #include "VideoCommon/FramebufferShaderGen.h"
+#include "VideoCommon/PostProcessing.h"
 #include "VideoCommon/RenderBase.h"
 #include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VideoCommon.h"
@@ -605,9 +606,15 @@ void FramebufferManager::PopulateEFBCache(bool depth, u32 tile_index)
       depth ? ResolveEFBDepthTexture(native_rect) : ResolveEFBColorTexture(native_rect);
   if (g_renderer->GetEFBScale() != 1 || force_intermediate_copy)
   {
+    auto* post_processing = g_renderer->GetPostProcessing();
+
     // Downsample from internal resolution to 1x.
-    // TODO: This won't produce correct results at IRs above 2x. More samples are required.
+    // We can't do a direct downsampling for IRs above 2x. More samples are required.
     // This is the same issue as with EFB copies.
+    if (g_renderer->GetEFBScale() > 2 && post_processing->IsDownsampleValid())
+    {
+      post_processing->ApplyDownsample(m_efb_framebuffer.get(), rect, src_texture, native_rect, 0);
+    }
     src_texture->FinishedRendering();
     g_renderer->BeginUtilityDrawing();
 

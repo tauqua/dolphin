@@ -6,129 +6,174 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Common/MathUtil.h"
+#include "Common/Matrix.h"
 #include "Common/Timer.h"
+#include "VideoCommon/PostProcessingConfig.h"
+#include "VideoCommon/RenderState.h"
 #include "VideoCommon/TextureConfig.h"
 
+class AbstractFramebuffer;
+class AbstractTexture;
 class AbstractPipeline;
 class AbstractShader;
 class AbstractTexture;
 
-namespace VideoCommon
+namespace VideoCommon::PostProcessing
 {
-class PostProcessingConfiguration
-{
-public:
-  struct ConfigurationOption
-  {
-    enum OptionType
-    {
-      OPTION_BOOL = 0,
-      OPTION_FLOAT,
-      OPTION_INTEGER,
-    };
-
-    bool m_bool_value;
-
-    std::vector<float> m_float_values;
-    std::vector<s32> m_integer_values;
-
-    std::vector<float> m_float_min_values;
-    std::vector<s32> m_integer_min_values;
-
-    std::vector<float> m_float_max_values;
-    std::vector<s32> m_integer_max_values;
-
-    std::vector<float> m_float_step_values;
-    std::vector<s32> m_integer_step_values;
-
-    OptionType m_type;
-
-    std::string m_gui_name;
-    std::string m_option_name;
-    std::string m_dependent_option;
-    bool m_dirty;
-  };
-
-  using ConfigMap = std::map<std::string, ConfigurationOption>;
-
-  PostProcessingConfiguration();
-  virtual ~PostProcessingConfiguration();
-
-  // Loads the configuration with a shader
-  // If the argument is "" the class will load the shader from the g_activeConfig option.
-  // Returns the loaded shader source from file
-  void LoadShader(const std::string& shader);
-  void LoadDefaultShader();
-  void SaveOptionsConfiguration();
-  const std::string& GetShader() const { return m_current_shader; }
-  const std::string& GetShaderCode() const { return m_current_shader_code; }
-  bool IsDirty() const { return m_any_options_dirty; }
-  void SetDirty(bool dirty) { m_any_options_dirty = dirty; }
-  bool HasOptions() const { return m_options.size() > 0; }
-  const ConfigMap& GetOptions() const { return m_options; }
-  ConfigMap& GetOptions() { return m_options; }
-  const ConfigurationOption& GetOption(const std::string& option) { return m_options[option]; }
-  // For updating option's values
-  void SetOptionf(const std::string& option, int index, float value);
-  void SetOptioni(const std::string& option, int index, s32 value);
-  void SetOptionb(const std::string& option, bool value);
-
-private:
-  bool m_any_options_dirty = false;
-  std::string m_current_shader;
-  std::string m_current_shader_code;
-  ConfigMap m_options;
-
-  void LoadOptions(const std::string& code);
-  void LoadOptionsConfiguration();
-};
-
-class PostProcessing
+class Instance final
 {
 public:
-  PostProcessing();
-  virtual ~PostProcessing();
+  explicit Instance(Config* config);
+  ~Instance();
 
-  static std::vector<std::string> GetShaderList();
-  static std::vector<std::string> GetPassiveShaderList();
-  static std::vector<std::string> GetAnaglyphShaderList();
+  bool RequiresDepthBuffer() const { return m_config->RequiresDepthBuffer(); }
+  bool IsValid() const;
 
-  PostProcessingConfiguration* GetConfig() { return &m_config; }
+  bool Apply(AbstractFramebuffer* dest_fb, const MathUtil::Rectangle<int>& dest_rect,
+             const AbstractTexture* source_color_tex, const AbstractTexture* source_depth_tex,
+             const MathUtil::Rectangle<int>& source_rect, int source_layer);
+  bool ShadersCompiled();
 
-  bool Initialize(AbstractTextureFormat format);
-
-  void RecompileShader();
-  void RecompilePipeline();
-
-  void BlitFromTexture(const MathUtil::Rectangle<int>& dst, const MathUtil::Rectangle<int>& src,
-                       const AbstractTexture* src_tex, int src_layer);
+  void SetDepthNearFar(float depth_near, float depth_far);
 
 protected:
-  std::string GetUniformBufferHeader() const;
-  std::string GetHeader() const;
-  std::string GetFooter() const;
+  struct InputBinding final
+  {
+    InputType type;
+    u32 texture_unit;
+    SamplerState sampler_state;
+    const AbstractTexture* texture_ptr;
+    std::unique_ptr<AbstractTexture> owned_texture_ptr;
+    u32 source_pass_index;
+  };
 
-  bool CompileVertexShader();
-  bool CompilePixelShader();
-  bool CompilePipeline();
+  struct RenderPass final
+  {
+    std::shared_ptr<AbstractShader> vertex_shader;
+    std::unique_ptr<AbstractShader> pixel_shader;
+    std::unique_ptr<AbstractPipeline> pipeline;
+    std::vector<InputBinding> inputs;
 
-  size_t CalculateUniformsSize() const;
-  void FillUniformBuffer(const MathUtil::Rectangle<int>& src, const AbstractTexture* src_tex,
-                         int src_layer);
+    std::unique_ptr<AbstractTexture> output_texture;
+    std::unique_ptr<AbstractFramebuffer> output_framebuffer;
+    float output_scale;
+
+    u32 shader_index;
+    u32 shader_pass_index;
+  };
+
+  std::string GetUniformBufferHeader(const Shader& shader) const;
+  std::string GetPixelShaderHeader(const Shader& shader, const Pass& pass) const;
+  std::string GetPixelShaderFooter(const Shader& shader, const Pass& pass) const;
+
+  std::shared_ptr<AbstractShader> CompileVertexShader(const Shader& shader) const;
+  std::unique_ptr<AbstractShader> CompilePixelShader(const Shader& shader, const Pass& pass) const;
+  std::unique_ptr<AbstractShader> CompileGeometryShader() const;
+
+  size_t CalculateUniformsSize(const Shader& shader) const;
+  void UploadUniformBuffer(const Shader& shader, const AbstractTexture* prev_texture,
+                           const MathUtil::Rectangle<int>& prev_rect,
+                           const AbstractTexture* source_color_texture,
+                           const MathUtil::Rectangle<int>& source_rect, int source_layer,
+                           float last_pass_output_scale);
+
+  bool CompilePasses();
+  bool CreateInputBinding(u32 shader_index, const Input& input, InputBinding* binding);
+  const RenderPass* GetRenderPass(u32 shader_index, u32 pass_index) const;
+  u32 GetRenderPassIndex(u32 shader_index, u32 pass_index) const;
+
+  bool CreateOutputTextures(u32 new_width, u32 new_height, u32 new_layers,
+                            AbstractTextureFormat new_format);
+  void LinkPassOutputs();
+  bool CompilePipelines();
 
   // Timer for determining our time value
   Common::Timer m_timer;
-  PostProcessingConfiguration m_config;
+  Config* m_config;
 
   std::unique_ptr<AbstractShader> m_vertex_shader;
-  std::unique_ptr<AbstractShader> m_pixel_shader;
-  std::unique_ptr<AbstractPipeline> m_pipeline;
-  AbstractTextureFormat m_framebuffer_format = AbstractTextureFormat::Undefined;
+  std::unique_ptr<AbstractShader> m_geometry_shader;
+
   std::vector<u8> m_uniform_staging_buffer;
+
+  // intermediate buffer sizes
+  u32 m_target_width = 0;
+  u32 m_target_height = 0;
+  u32 m_target_layers = 0;
+  AbstractTextureFormat m_target_format = AbstractTextureFormat::Undefined;
+
+  std::vector<RenderPass> m_render_passes;
+  bool m_last_pass_uses_color_buffer = false;
+  bool m_last_pass_scaled = false;
+  u64 m_last_change_count = 0;
+
+  float m_depth_near = 0.001f;
+  float m_depth_far = 1.0f;
 };
-}  // namespace VideoCommon
+
+class System
+{
+public:
+  System();
+
+  bool IsEFBValid() const { return m_efb_instance.IsValid(); }
+  bool IsPostValid() const { return m_post_instance.IsValid(); }
+  bool IsXFBValid() const { return m_xfb_instance.IsValid(); }
+  bool IsTextureValid() const { return m_texture_instance.IsValid(); }
+  bool IsDownsampleValid() const { return m_downsample_instance.IsValid(); }
+
+  bool ApplyEFB(AbstractFramebuffer* dest_fb, const MathUtil::Rectangle<int>& dest_rect,
+                const AbstractTexture* source_color_tex, const AbstractTexture* source_depth_tex,
+                const MathUtil::Rectangle<int>& source_rect, int source_layer);
+
+  bool ApplyXFB(AbstractFramebuffer* dest_fb, const MathUtil::Rectangle<int>& dest_rect,
+                const AbstractTexture* source_color_tex, const AbstractTexture* source_depth_tex,
+                const MathUtil::Rectangle<int>& source_rect, int source_layer);
+
+  bool ApplyPost(AbstractFramebuffer* dest_fb, const MathUtil::Rectangle<int>& dest_rect,
+                 const AbstractTexture* source_color_tex,
+                 const MathUtil::Rectangle<int>& source_rect, int source_layer);
+
+  bool ApplyTextures(AbstractFramebuffer* dest_fb, const MathUtil::Rectangle<int>& dest_rect,
+                    const AbstractTexture* source_color_tex,
+                    const MathUtil::Rectangle<int>& source_rect, int source_layer);
+
+  bool ApplyDownsample(AbstractFramebuffer* dest_fb, const MathUtil::Rectangle<int>& dest_rect,
+                       const AbstractTexture* source_color_tex,
+                       const MathUtil::Rectangle<int>& source_rect, int source_layer);
+
+  void OnProjectionChanged(u32 type, const Common::Matrix44& projection_mtx);
+  void OnFrameEnd(std::optional<MathUtil::Rectangle<int>> xfb_rect);
+  void OnEFBWritten(const MathUtil::Rectangle<int>& efb_rect);
+  void OnOpcodeDrawingStateChanged(bool is_drawing);
+  void OnEFBTriggered();
+
+private:
+  void ProcessEFB(std::optional<MathUtil::Rectangle<int>> efb_rect);
+  void ProcessEFBRect(const MathUtil::Rectangle<int>& framebuffer_rect);
+  enum ProjectionState : u32
+  {
+    Initial,
+    Perspective,
+    Final
+  };
+  ProjectionState m_projection_state = ProjectionState::Initial;
+  bool m_saw_2d_element = false;
+  bool m_efb_triggered = false;
+  bool m_ignore_2d = true;
+  u8 m_draw_count = 0;
+
+  Instance m_efb_instance;
+  Instance m_xfb_instance;
+  Instance m_post_instance;
+  Instance m_texture_instance;
+  Instance m_downsample_instance;
+};
+
+}  // namespace VideoCommon::PostProcessing

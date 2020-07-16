@@ -15,6 +15,8 @@
 
 #include "Common/CommonTypes.h"
 
+#include "VideoCommon/PostProcessingConfig.h"
+
 enum class APIType;
 
 // Log in two categories, and save three other options in the same byte
@@ -73,11 +75,16 @@ struct VideoConfig final
   int iEFBScale;
   bool bForceFiltering;
   int iMaxAnisotropy;
-  std::string sPostProcessingShader;
   bool bForceTrueColor;
   bool bDisableCopyFilter;
   bool bArbitraryMipmapDetection;
   float fArbitraryMipmapDetectionThreshold;
+  std::string custom_shader_preset;
+  VideoCommon::PostProcessing::Config shader_config_post_process;
+  VideoCommon::PostProcessing::Config shader_config_efb;
+  VideoCommon::PostProcessing::Config shader_config_xfb;
+  VideoCommon::PostProcessing::Config shader_config_textures;
+  VideoCommon::PostProcessing::Config shader_config_downsample;
 
   // Information
   bool bShowFPS;
@@ -241,6 +248,14 @@ struct VideoConfig final
   bool UsingUberShaders() const;
   u32 GetShaderCompilerThreads() const;
   u32 GetShaderPrecompilerThreads() const;
+
+  void UpdateDownsampleShader();
+
+  void LoadCustomShaderPresetFromConfig(bool fallback_to_default = false);
+  void LoadCustomShaderPreset(const std::string& file_path);
+
+  void SaveCustomShaderPresetDefault();
+  void SaveCustomShaderPreset(const std::string& file_path);
 };
 
 extern VideoConfig g_Config;
@@ -248,3 +263,6 @@ extern VideoConfig g_ActiveConfig;
 
 // Called every frame.
 void UpdateActiveConfig();
+
+using ShaderConfigChangedCallback = std::function<void()>;
+void AddShaderConfigLoadedCallback(ShaderConfigChangedCallback func);

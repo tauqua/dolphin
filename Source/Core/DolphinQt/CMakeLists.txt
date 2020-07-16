@@ -91,6 +91,8 @@ add_executable(dolphin-emu
   Config/Graphics/AdvancedWidget.h
   Config/Graphics/BalloonTip.cpp
   Config/Graphics/BalloonTip.h
+  Config/Graphics/CustomShaderWindow.cpp
+  Config/Graphics/CustomShaderWindow.h
   Config/Graphics/EnhancementsWidget.cpp
   Config/Graphics/EnhancementsWidget.h
   Config/Graphics/GeneralWidget.cpp
@@ -110,8 +112,12 @@ add_executable(dolphin-emu
   Config/Graphics/GraphicsWindow.h
   Config/Graphics/HacksWidget.cpp
   Config/Graphics/HacksWidget.h
-  Config/Graphics/PostProcessingConfigWindow.cpp
-  Config/Graphics/PostProcessingConfigWindow.h
+  Config/Graphics/PostProcessingAddShaderDialog.cpp
+  Config/Graphics/PostProcessingAddShaderDialog.h
+  Config/Graphics/PostProcessingAddShaderListWidget.cpp
+  Config/Graphics/PostProcessingAddShaderListWidget.h
+  Config/Graphics/PostProcessingShaderListWidget.cpp
+  Config/Graphics/PostProcessingShaderListWidget.h
   Config/Graphics/SoftwareRendererWidget.cpp
   Config/Graphics/SoftwareRendererWidget.h
   Config/InfoWidget.cpp

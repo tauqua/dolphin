@@ -121,9 +121,9 @@ bool Renderer::Initialize()
   if (!InitializeImGui())
     return false;
 
-  m_post_processor = std::make_unique<VideoCommon::PostProcessing>();
-  if (!m_post_processor->Initialize(m_backbuffer_format))
-    return false;
+  g_Config.LoadCustomShaderPresetFromConfig();
+  m_post_processor = std::make_unique<VideoCommon::PostProcessing::System>();
+  g_Config.UpdateDownsampleShader();
 
   return true;
 }
@@ -279,6 +279,8 @@ void Renderer::RenderToXFB(u32 xfbAddr, const MathUtil::Rectangle<int>& sourceRc
 {
   CheckFifoRecording();
 
+  //m_post_processor->OnFrameEnd();
+
   if (!fbStride || !fbHeight)
     return;
 }
@@ -404,6 +406,14 @@ void Renderer::CheckForConfigChanges()
   const bool old_vsync = g_ActiveConfig.bVSyncActive;
   const bool old_bbox = g_ActiveConfig.bBBoxEnable;
 
+  const u64 old_efb_shader_changes = g_ActiveConfig.shader_config_efb.GetChangeCount();
+  const u64 old_xfb_shader_changes = g_ActiveConfig.shader_config_xfb.GetChangeCount();
+  const u64 old_post_process_shader_changes =
+      g_ActiveConfig.shader_config_post_process.GetChangeCount();
+  const u64 old_texture_shader_changes = g_ActiveConfig.shader_config_textures.GetChangeCount();
+
+  // The existing shader must not be in use when it's destroyed
+  WaitForGPUIdle();
   UpdateActiveConfig();
   FreeLook::UpdateActiveConfig();
 
@@ -415,16 +425,6 @@ void Renderer::CheckForConfigChanges()
   // EFB tile cache doesn't need to notify the backend.
   if (old_efb_access_tile_size != g_ActiveConfig.iEFBAccessTileSize)
     g_framebuffer_manager->SetEFBCacheTileSize(std::max(g_ActiveConfig.iEFBAccessTileSize, 0));
-
-  // Check for post-processing shader changes. Done up here as it doesn't affect anything outside
-  // the post-processor. Note that options are applied every frame, so no need to check those.
-  if (m_post_processor->GetConfig()->GetShader() != g_ActiveConfig.sPostProcessingShader)
-  {
-    // The existing shader must not be in use when it's destroyed
-    WaitForGPUIdle();
-
-    m_post_processor->RecompileShader();
-  }
 
   // Determine which (if any) settings have changed.
   ShaderHostConfig new_host_config = ShaderHostConfig::GetCurrent();
@@ -489,7 +489,6 @@ void Renderer::CheckForConfigChanges()
   if (changed_bits & CONFIG_CHANGE_BIT_STEREO_MODE)
   {
     RecompileImGuiPipeline();
-    m_post_processor->RecompilePipeline();
   }
 }
 
@@ -651,9 +650,14 @@ void Renderer::ScaleTexture(AbstractFramebuffer* dst_framebuffer,
                             const AbstractTexture* src_texture,
                             const MathUtil::Rectangle<int>& src_rect)
 {
-  ASSERT(dst_framebuffer->GetColorFormat() == AbstractTextureFormat::RGBA8);
-
-  BeginUtilityDrawing();
+  const AbstractPipeline* pipeline =
+      g_shader_cache->GetBlitPipeline(dst_framebuffer->GetColorFormat(),
+                                      dst_framebuffer->GetLayers(), dst_framebuffer->GetSamples());
+  if (!pipeline)
+  {
+    PanicAlert("Missing pipeline for texture scale/blit");
+    return;
+  }
 
   // The shader needs to know the source rectangle.
   const auto converted_src_rect =
@@ -678,14 +682,10 @@ void Renderer::ScaleTexture(AbstractFramebuffer* dst_framebuffer,
   }
 
   SetViewportAndScissor(ConvertFramebufferRectangle(dst_rect, dst_framebuffer));
-  SetPipeline(dst_framebuffer->GetLayers() > 1 ? g_shader_cache->GetRGBA8StereoCopyPipeline() :
-                                                 g_shader_cache->GetRGBA8CopyPipeline());
+  SetPipeline(pipeline);
   SetTexture(0, src_texture);
   SetSamplerState(0, RenderState::GetLinearSamplerState());
   Draw(0, 3);
-  EndUtilityDrawing();
-  if (dst_framebuffer->GetColorAttachment())
-    dst_framebuffer->GetColorAttachment()->FinishedRendering();
 }
 
 MathUtil::Rectangle<int>
@@ -1228,6 +1228,8 @@ void Renderer::Swap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height, u6
   // behind the renderer.
   FlushFrameDump();
 
+  //m_post_processor->OnFrameEnd();
+
   if (xfb_addr && fb_width && fb_stride && fb_height)
   {
     // Get the current XFB from texture cache
@@ -1360,17 +1362,23 @@ void Renderer::RenderXFBToScreen(const MathUtil::Rectangle<int>& target_rc,
                                  const AbstractTexture* source_texture,
                                  const MathUtil::Rectangle<int>& source_rc)
 {
+  if (!m_post_processor->IsPostValid())
+  {
+    ScaleTexture(m_current_framebuffer, target_rc, source_texture, source_rc);
+    return;
+  }
+
   if (g_ActiveConfig.stereo_mode == StereoMode::SBS ||
       g_ActiveConfig.stereo_mode == StereoMode::TAB)
   {
     const auto [left_rc, right_rc] = ConvertStereoRectangle(target_rc);
 
-    m_post_processor->BlitFromTexture(left_rc, source_rc, source_texture, 0);
-    m_post_processor->BlitFromTexture(right_rc, source_rc, source_texture, 1);
+    m_post_processor->ApplyPost(m_current_framebuffer, left_rc, source_texture, source_rc, 0);
+    m_post_processor->ApplyPost(m_current_framebuffer, right_rc, source_texture, source_rc, 1);
   }
   else
   {
-    m_post_processor->BlitFromTexture(target_rc, source_rc, source_texture, 0);
+    m_post_processor->ApplyPost(m_current_framebuffer, target_rc, source_texture, source_rc, 0);
   }
 }
 
@@ -1414,6 +1422,7 @@ void Renderer::DumpCurrentFrame(const AbstractTexture* src_texture,
                  src_texture, src_rect);
     src_texture = m_frame_dump_render_texture.get();
     copy_rect = src_texture->GetRect();
+    m_frame_dump_render_texture->FinishedRendering();
   }
 
   if (!CheckFrameDumpReadbackTexture(target_width, target_height))
@@ -1739,4 +1748,9 @@ void Renderer::DoState(PointerWrap& p)
 std::unique_ptr<VideoCommon::AsyncShaderCompiler> Renderer::CreateAsyncShaderCompiler()
 {
   return std::make_unique<VideoCommon::AsyncShaderCompiler>();
+}
+
+VideoCommon::PostProcessing::System* Renderer::GetPostProcessing() const
+{
+  return m_post_processor.get();
 }

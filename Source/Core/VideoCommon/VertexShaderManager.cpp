@@ -22,6 +22,7 @@
 #include "VideoCommon/BPMemory.h"
 #include "VideoCommon/CPMemory.h"
 #include "VideoCommon/FreeLookCamera.h"
+#include "VideoCommon/PostProcessing.h"
 #include "VideoCommon/RenderBase.h"
 #include "VideoCommon/Statistics.h"
 #include "VideoCommon/VertexManagerBase.h"
@@ -423,6 +424,8 @@ void VertexShaderManager::SetConstants()
       corrected_matrix *= g_freelook_camera.GetView();
 
     memcpy(constants.projection.data(), corrected_matrix.data.data(), 4 * sizeof(float4));
+
+    g_renderer->GetPostProcessing()->OnProjectionChanged(xfmem.projection.type, corrected_matrix);
 
     g_freelook_camera.SetClean();
 

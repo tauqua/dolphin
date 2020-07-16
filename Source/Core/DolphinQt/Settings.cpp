@@ -32,6 +32,7 @@
 #include "VideoCommon/NetPlayChatUI.h"
 #include "VideoCommon/NetPlayGolfUI.h"
 #include "VideoCommon/RenderBase.h"
+#include "VideoCommon/VideoConfig.h"
 
 Settings::Settings()
 {
@@ -42,6 +43,9 @@ Settings::Settings()
 
   Config::AddConfigChangedCallback(
       [this] { QueueOnObject(this, [this] { emit ConfigChanged(); }); });
+
+  AddShaderConfigLoadedCallback(
+      [this] { QueueOnObject(this, [this] { emit ShaderConfigLoaded(); }); });
 
   g_controller_interface.RegisterDevicesChangedCallback(
       [this] { QueueOnObject(this, [this] { emit DevicesChanged(); }); });

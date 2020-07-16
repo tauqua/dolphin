@@ -52,10 +52,10 @@ enum class EFBReinterpretType;
 enum class StagingTextureType;
 enum class AspectMode;
 
-namespace VideoCommon
+namespace VideoCommon::PostProcessing
 {
-class PostProcessing;
-}  // namespace VideoCommon
+class System;
+}  // namespace VideoCommon::PostProcessing
 
 struct EfbPokeData
 {
@@ -152,6 +152,7 @@ public:
                              float max_depth = 1.0f);
 
   // Scales a GPU texture using a copy shader.
+  // NOTE: Does not begin/end utility drawing, that is the responsibiltiy of the caller.
   virtual void ScaleTexture(AbstractFramebuffer* dst_framebuffer,
                             const MathUtil::Rectangle<int>& dst_rect,
                             const AbstractTexture* src_texture,
@@ -235,7 +236,7 @@ public:
   PixelFormat GetPrevPixelFormat() const { return m_prev_efb_format; }
   void StorePixelFormat(PixelFormat new_format) { m_prev_efb_format = new_format; }
   bool EFBHasAlphaChannel() const;
-  VideoCommon::PostProcessing* GetPostProcessor() const { return m_post_processor.get(); }
+
   // Final surface changing
   // This is called when the surface is resized (WX) or the window changes (Android).
   void ChangeSurface(void* new_surface_handle);
@@ -261,6 +262,8 @@ public:
 
   // Will forcibly reload all textures on the next swap
   void ForceReloadTextures();
+
+  VideoCommon::PostProcessing::System* GetPostProcessing() const;
 
 protected:
   // Bitmask containing information about which configuration has changed for the backend.
@@ -326,7 +329,7 @@ protected:
 
   FPSCounter m_fps_counter;
 
-  std::unique_ptr<VideoCommon::PostProcessing> m_post_processor;
+  std::unique_ptr<VideoCommon::PostProcessing::System> m_post_processor;
 
   void* m_new_surface_handle = nullptr;
   Common::Flag m_surface_changed;
