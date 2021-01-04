@@ -260,15 +260,18 @@ void PostProcessingShaderListWidget::OnShaderChanged(VideoCommon::PostProcessing
 QLayout*
 PostProcessingShaderListWidget::BuildPassesLayout(VideoCommon::PostProcessing::Shader* shader)
 {
-  QGridLayout* pass_layout = new QGridLayout;
+  QVBoxLayout* passes_layout = new QVBoxLayout;
   for (u32 i = 0; i < shader->GetPassCount(); i++)
   {
     auto& pass = shader->GetPass(i);
-    pass_layout->addWidget(new QLabel(QString::fromStdString(pass.gui_name)), 2 * i, 0);
 
-    auto* pass_options_layout = new QHBoxLayout;
-    pass_options_layout->addWidget(new QLabel(QStringLiteral("Scale")));
+    if (pass.gui_name == "")
+      continue;
 
+    QGridLayout* pass_layout = new QGridLayout;
+    pass_layout->addWidget(new QLabel(QString::fromStdString(pass.gui_name)), 0, 0);
+
+    pass_layout->addWidget(new QLabel(QStringLiteral("Scale")), 1, 0);
     auto box = new QDoubleSpinBox;
     box->setValue(pass.output_scale);
     connect(box, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
@@ -276,11 +279,22 @@ PostProcessingShaderListWidget::BuildPassesLayout(VideoCommon::PostProcessing::S
               pass.output_scale = static_cast<float>(value);
               GetConfig()->IncrementChangeCount();
             });
-    pass_options_layout->addWidget(box);
+    pass_layout->addWidget(box, 1, 1);
 
-    pass_layout->addLayout(pass_options_layout, 2 * i + 1, 0);
+    int input_row = 2;
+    for (auto& input : pass.inputs)
+    {
+      if (input.type == VideoCommon::PostProcessing::InputType::ExternalImage)
+      {
+        pass_layout->addWidget(
+            new QLabel(QStringLiteral("Input %i Image Source").arg(input.texture_unit)), input_row,
+            0);
+      }
+    }
+
+    passes_layout->addLayout(pass_layout);
   }
-  return pass_layout;
+  return passes_layout;
 }
 
 QLayout*

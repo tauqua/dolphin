@@ -4,6 +4,12 @@
 
 #include "VideoCommon/PostProcessingConfig.h"
 
+#ifdef _MSC_VER
+#include <filesystem>
+namespace fs = std::filesystem;
+#define HAS_STD_FILESYSTEM
+#endif
+
 #include <string>
 #include <string_view>
 
@@ -509,11 +515,19 @@ bool Shader::ParsePassBlock(const ConfigBlock& block)
       else if (extra == "Source")
       {
         // Load external image
-        std::string path = m_base_path + value;
+#ifdef HAS_STD_FILESYSTEM
+        const fs::path path_value = fs::path(value);
+        const std::string image_path =
+            path_value.is_relative() ?
+                fs::path(m_base_path).append(value).string() :
+                value;
+#else
+        const std::string image_path = value.front() != '/' ? m_base_path + value : value;
+#endif
         input->type = InputType::ExternalImage;
-        if (!LoadExternalImage(path, input->external_image))
+        if (!LoadExternalImage(image_path, input->external_image))
         {
-          ERROR_LOG_FMT(VIDEO, "Unable to load external image at '{}'", value);
+          ERROR_LOG_FMT(VIDEO, "Unable to load external image at '{}'", image_path);
           return false;
         }
       }
