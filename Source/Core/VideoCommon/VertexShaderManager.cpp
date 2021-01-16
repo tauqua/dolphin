@@ -417,10 +417,22 @@ void VertexShaderManager::SetConstants()
     PRIM_LOG("Projection: {} {} {} {} {} {}", rawProjection[0], rawProjection[1], rawProjection[2],
              rawProjection[3], rawProjection[4], rawProjection[5]);
 
-    auto corrected_matrix = s_viewportCorrection * Common::Matrix44::FromArray(g_fProjectionMatrix);
+    const auto projection = Common::Matrix44::FromArray(g_fProjectionMatrix);
+    auto corrected_matrix = s_viewportCorrection * projection;
 
     if (g_freelook_camera.IsActive() && xfmem.projection.type == GX_PERSPECTIVE)
-      corrected_matrix *= g_freelook_camera.GetView();
+    {
+      const float z_near = projection.data[11] / (projection.data[10] - 1);
+      const float z_far = projection.data[11] / (projection.data[10] + 1);
+      if (g_freelook_camera.ReplacesProjection())
+      {
+        corrected_matrix = s_viewportCorrection * g_freelook_camera.GetView(z_near, z_far);
+      }
+      else
+      {
+        corrected_matrix *= g_freelook_camera.GetView(z_near, z_far);
+      }
+    }
 
     memcpy(constants.projection.data(), corrected_matrix.data.data(), 4 * sizeof(float4));
 

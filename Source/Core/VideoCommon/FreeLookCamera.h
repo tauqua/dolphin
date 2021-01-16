@@ -24,7 +24,7 @@ public:
   CameraController(CameraController&&) = delete;
   CameraController& operator=(CameraController&&) = delete;
 
-  virtual Common::Matrix44 GetView() = 0;
+  virtual Common::Matrix44 GetView(float z_near, float z_far) = 0;
 
   virtual void MoveVertical(float amt) = 0;
   virtual void MoveHorizontal(float amt) = 0;
@@ -36,6 +36,8 @@ public:
   virtual void Reset() = 0;
 
   virtual void DoState(PointerWrap& p) = 0;
+
+  virtual bool ReplacesProjection() const { return false; }
 };
 
 class FreeLookCamera
@@ -43,7 +45,7 @@ class FreeLookCamera
 public:
   FreeLookCamera();
   void SetControlType(FreeLook::ControlType type);
-  Common::Matrix44 GetView();
+  Common::Matrix44 GetView(float z_near, float z_far);
   Common::Vec2 GetFieldOfView() const;
 
   void MoveVertical(float amt);
@@ -68,6 +70,10 @@ public:
   float GetSpeed() const;
 
   bool IsActive() const;
+
+  bool ReplacesProjection() const;
+
+  void SetNearFar(float z_near, float z_far);
 
 private:
   bool m_dirty = false;

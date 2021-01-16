@@ -15,6 +15,7 @@
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 
+#include "VideoCommon/RenderBase.h"
 #include "VideoCommon/VideoCommon.h"
 
 FreeLookCamera g_freelook_camera;
@@ -41,7 +42,7 @@ class SixAxisController : public CameraController
 public:
   SixAxisController() = default;
 
-  Common::Matrix44 GetView() override { return m_mat; }
+  Common::Matrix44 GetView(float, float) override { return m_mat; }
 
   void MoveVertical(float amt) override
   {
@@ -79,7 +80,7 @@ constexpr double HalfPI = MathUtil::PI / 2;
 class FPSController : public CameraController
 {
 public:
-  Common::Matrix44 GetView() override
+  Common::Matrix44 GetView(float, float) override
   {
     return m_rotate_mat * Common::Matrix44::Translate(m_position);
   }
@@ -135,7 +136,7 @@ private:
 class OrbitalController : public CameraController
 {
 public:
-  Common::Matrix44 GetView() override
+  Common::Matrix44 GetView(float, float) override
   {
     Common::Matrix44 result = Common::Matrix44::Identity();
     result *= Common::Matrix44::Translate(Common::Vec3{0, 0, -m_distance});
@@ -173,6 +174,90 @@ private:
   float m_distance = 0;
   Common::Vec3 m_rotation = Common::Vec3{};
 };
+
+class OffAxisController final : public CameraController
+{
+public:
+  Common::Matrix44 GetView(float z_near, float z_far) override
+  {
+    return CalculateProjectionMatrix(z_near, z_far) *
+           Common::Matrix44::FromQuaternion(m_rotate_quat);
+  }
+
+  void MoveVertical(float amt) override
+  {
+    const Common::Vec3 up = m_rotate_quat.Conjugate() * Common::Vec3{0, 1, 0};
+    m_eye_position += up * amt;
+  }
+
+  void MoveHorizontal(float amt) override
+  {
+    const Common::Vec3 right = m_rotate_quat.Conjugate() * Common::Vec3{1, 0, 0};
+    m_eye_position += right * amt;
+  }
+
+  void MoveForward(float amt) override
+  {
+    const Common::Vec3 forward = m_rotate_quat.Conjugate() * Common::Vec3{0, 0, 1};
+    m_eye_position += forward * amt;
+  }
+
+  void Rotate(const Common::Vec3& amt) override
+  {
+    m_rotation += amt;
+
+    using Common::Quaternion;
+    m_rotate_quat =
+        (Quaternion::RotateX(m_rotation.x) * Quaternion::RotateY(m_rotation.y)).Normalized();
+  }
+
+  void Reset() override
+  {
+    m_rotation = Common::Vec3{};
+    m_rotate_quat = Common::Quaternion::Identity();
+    m_eye_position = Common::Vec3{};
+  }
+
+  void DoState(PointerWrap& p)
+  {
+    p.Do(m_rotation);
+    p.Do(m_rotate_quat);
+    p.Do(m_eye_position);
+  }
+
+  bool ReplacesProjection() const override { return true; }
+
+private:
+  Common::Matrix44 CalculateProjectionMatrix(float z_near, float z_far)
+  {
+    const int target_height = g_renderer->GetTargetHeight();
+    const int target_width = g_renderer->GetTargetWidth();
+    Common::Vec3 pa{target_width * -0.5f, target_height * -0.5f, 0.0f}; // Bottom left
+    Common::Vec3 pb{target_width * 0.5f, target_height * -0.5f, 0.0f};  // Bottom right
+    Common::Vec3 pc{target_width * -0.5f, target_height * 0.5f, 0.0f};  // top left
+    Common::Vec3 pd{target_width * 0.5f, target_height * 0.5f, 0.0f};   // top right
+
+    Common::Vec3 vr = (pb - pa).Normalized();
+    Common::Vec3 vu = (pc - pa).Normalized();
+    Common::Vec3 vn = vr.Cross(vu).Normalized();
+
+    Common::Vec3 va = pa - m_eye_position;
+    Common::Vec3 vb = pb - m_eye_position;
+    Common::Vec3 vc = pc - m_eye_position;
+
+    const float distance = va.Dot(vn) * -1;
+
+    const float l = vr.Dot(va) * z_near / distance;
+    const float r = vr.Dot(vb) * z_near / distance;
+    const float b = vu.Dot(va) * z_near / distance;
+    const float t = vu.Dot(vc) * z_near / distance;
+
+    return Common::Matrix44::Frustum(l, r, b, t, z_near, z_far);
+  }
+  Common::Vec3 m_eye_position;
+  Common::Vec3 m_rotation = Common::Vec3{};
+  Common::Quaternion m_rotate_quat = Common::Quaternion::Identity();
+};
 }  // namespace
 
 FreeLookCamera::FreeLookCamera()
@@ -199,13 +284,17 @@ void FreeLookCamera::SetControlType(FreeLook::ControlType type)
   {
     m_camera_controller = std::make_unique<FPSController>();
   }
+  else if (type == FreeLook::ControlType::OffAxis)
+  {
+    m_camera_controller = std::make_unique<OffAxisController>();
+  }
 
   m_current_type = type;
 }
 
-Common::Matrix44 FreeLookCamera::GetView()
+Common::Matrix44 FreeLookCamera::GetView(float z_near, float z_far)
 {
-  return m_camera_controller->GetView();
+  return m_camera_controller->GetView(z_near, z_far);
 }
 
 Common::Vec2 FreeLookCamera::GetFieldOfView() const
@@ -328,4 +417,9 @@ void FreeLookCamera::SetClean()
 bool FreeLookCamera::IsActive() const
 {
   return FreeLook::GetActiveConfig().enabled;
+}
+
+bool FreeLookCamera::ReplacesProjection() const
+{
+  return m_camera_controller->ReplacesProjection();
 }

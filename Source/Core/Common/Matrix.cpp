@@ -269,6 +269,11 @@ Matrix44 Matrix44::FromMatrix33(const Matrix33& m33)
   return mtx;
 }
 
+Matrix44 Matrix44::FromQuaternion(const Quaternion& q)
+{
+  return FromMatrix33(Matrix33::FromQuaternion(q));
+}
+
 Matrix44 Matrix44::FromArray(const std::array<float, 16>& arr)
 {
   Matrix44 mtx;
@@ -302,6 +307,26 @@ Matrix44 Matrix44::Perspective(float fov_y, float aspect_ratio, float z_near, fl
   mtx.data[10] = -(z_far + z_near) / (z_far - z_near);
   mtx.data[11] = -(2 * z_far * z_near) / (z_far - z_near);
   mtx.data[14] = -1;
+  return mtx;
+}
+
+Matrix44 Matrix44::Frustum(float left, float right, float bottom, float top, float z_near,
+  float z_far)
+{
+  const float a = (right + left) / (right - left);
+  const float b = (top + bottom) / (top - bottom);
+  const float c = -(z_far + z_near) / (z_far - z_near);
+  const float d = -(2 * z_far * z_near) / (z_far - z_near);
+
+  Matrix44 mtx{};
+  mtx.data[0] = (2 * z_near) / (right - left);
+  mtx.data[5] = (2 * z_near) / (top - bottom);
+  mtx.data[8] = a;
+  mtx.data[9] = b;
+  mtx.data[10] = c;
+  mtx.data[11] = -1;
+  mtx.data[14] = d;
+
   return mtx;
 }
 

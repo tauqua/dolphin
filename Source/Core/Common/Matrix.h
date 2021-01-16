@@ -402,11 +402,14 @@ class Matrix44
 public:
   static Matrix44 Identity();
   static Matrix44 FromMatrix33(const Matrix33& m33);
+  static Matrix44 FromQuaternion(const Quaternion& q);
   static Matrix44 FromArray(const std::array<float, 16>& arr);
 
   static Matrix44 Translate(const Vec3& vec);
   static Matrix44 Shear(const float a, const float b = 0);
   static Matrix44 Perspective(float fov_y, float aspect_ratio, float z_near, float z_far);
+  static Matrix44 Frustum(float left, float right, float bottom, float top, float z_near,
+                          float z_far);
 
   static void Multiply(const Matrix44& a, const Matrix44& b, Matrix44* result);
   static void Multiply(const Matrix44& a, const Vec4& vec, Vec4* result);
