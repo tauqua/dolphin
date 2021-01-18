@@ -426,7 +426,10 @@ void VertexShaderManager::SetConstants()
       const float z_far = projection.data[11] / (projection.data[10] + 1);
       if (g_freelook_camera.ReplacesProjection())
       {
+        //const auto inv_projection = corrected_matrix.Inverted();
         corrected_matrix = s_viewportCorrection * g_freelook_camera.GetView(z_near, z_far);
+        /*corrected_matrix = s_viewportCorrection * Common::Matrix44::Perspective(
+                               1.221729444444444f, 16.0f / 9.0f, z_near, z_far);*/
       }
       else
       {

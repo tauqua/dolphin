@@ -310,7 +310,7 @@ Matrix44 Matrix44::Perspective(float fov_y, float aspect_ratio, float z_near, fl
   return mtx;
 }
 
-Matrix44 Matrix44::Frustum(float left, float right, float bottom, float top, float z_near,
+/*Matrix44 Matrix44::Frustum(float left, float right, float bottom, float top, float z_near,
   float z_far)
 {
   const float a = (right + left) / (right - left);
@@ -320,13 +320,28 @@ Matrix44 Matrix44::Frustum(float left, float right, float bottom, float top, flo
 
   Matrix44 mtx{};
   mtx.data[0] = (2 * z_near) / (right - left);
+  mtx.data[2] = a;
   mtx.data[5] = (2 * z_near) / (top - bottom);
-  mtx.data[8] = a;
-  mtx.data[9] = b;
+  mtx.data[6] = b;
   mtx.data[10] = c;
-  mtx.data[11] = -1;
-  mtx.data[14] = d;
+  mtx.data[11] = d;
+  mtx.data[14] = -1;
 
+  return mtx;
+}*/
+
+
+Matrix44 Matrix44::Frustum(float left, float right, float bottom, float top, float z_near,
+                           float z_far)
+{
+  Matrix44 mtx{};
+  mtx.data[0] = 2 * z_near / (right - left);
+  mtx.data[2] = (right + left) / (right - left);
+  mtx.data[5] = 2 * z_near / (top - bottom);
+  mtx.data[6] = (top + bottom) / (top - bottom);
+  mtx.data[10] = (z_far + z_near) / (z_far - z_near);
+  mtx.data[11] = -(2 * z_far * z_near) / (z_far - z_near);
+  mtx.data[14] = -1;
   return mtx;
 }
 

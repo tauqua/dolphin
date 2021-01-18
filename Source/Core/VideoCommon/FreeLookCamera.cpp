@@ -180,8 +180,10 @@ class OffAxisController final : public CameraController
 public:
   Common::Matrix44 GetView(float z_near, float z_far) override
   {
-    return CalculateProjectionMatrix(z_near, z_far) *
-           Common::Matrix44::FromQuaternion(m_rotate_quat);
+    /*return CalculateProjectionMatrix(z_near, z_far) *
+           Common::Matrix44::FromQuaternion(m_rotate_quat.Inverted());*/
+
+    return CalculateProjectionMatrix(z_near, z_far);
   }
 
   void MoveVertical(float amt) override
@@ -228,33 +230,96 @@ public:
   bool ReplacesProjection() const override { return true; }
 
 private:
+
+  Common::Matrix44 TestProj(float z_near, float z_far)
+  {
+    const int target_height = g_renderer->GetTargetHeight();
+    const int target_width = g_renderer->GetTargetWidth();
+    const float aspect_ratio = static_cast<float>(target_width) / static_cast<float>(target_height);
+
+    float distance = m_eye_position.z;
+    if (distance < 1.0f)
+      distance = 1.0f;
+    float the_near = 0.05f;
+    const float l = the_near * (-0.5f * aspect_ratio + m_eye_position.x) / distance;
+    const float r = the_near * (0.5f * aspect_ratio + m_eye_position.x) / distance;
+    const float t = the_near * (0.5f + m_eye_position.y) / distance;
+    const float b = the_near * (-0.5f + m_eye_position.y) / distance;
+
+    return Common::Matrix44::Frustum(l, r, b, t, the_near, z_far) *
+           Common::Matrix44::Translate(
+               Common::Vec3{-m_eye_position.x, -m_eye_position.y, -m_eye_position.z});
+  }
+
   Common::Matrix44 CalculateProjectionMatrix(float z_near, float z_far)
   {
     const int target_height = g_renderer->GetTargetHeight();
     const int target_width = g_renderer->GetTargetWidth();
-    Common::Vec3 pa{target_width * -0.5f, target_height * -0.5f, 0.0f}; // Bottom left
-    Common::Vec3 pb{target_width * 0.5f, target_height * -0.5f, 0.0f};  // Bottom right
-    Common::Vec3 pc{target_width * -0.5f, target_height * 0.5f, 0.0f};  // top left
-    Common::Vec3 pd{target_width * 0.5f, target_height * 0.5f, 0.0f};   // top right
+    const float aspect_ratio = static_cast<float>(target_width) / static_cast<float>(target_height);
+    Common::Vec3 pa = Common::Vec3{aspect_ratio * -0.5f * m_projection_window_size,
+                                   -0.5f * m_projection_window_size,
+                                   0.0f};                                            // Bottom left
+    Common::Vec3 pb = Common::Vec3{aspect_ratio * 0.5f * m_projection_window_size,
+                                   -0.5f * m_projection_window_size,
+                                   0.0f};                                            // Bottom right
+    Common::Vec3 pc = Common::Vec3{aspect_ratio * -0.5f * m_projection_window_size,
+                                   0.5f * m_projection_window_size,
+                                   0.0f};  // top left
 
     Common::Vec3 vr = (pb - pa).Normalized();
     Common::Vec3 vu = (pc - pa).Normalized();
     Common::Vec3 vn = vr.Cross(vu).Normalized();
 
-    Common::Vec3 va = pa - m_eye_position;
-    Common::Vec3 vb = pb - m_eye_position;
-    Common::Vec3 vc = pc - m_eye_position;
+    const auto eye_position = m_initial_frustum_position + m_eye_position;
+    Common::Vec3 va = pa - eye_position;
+    Common::Vec3 vb = pb - eye_position;
+    Common::Vec3 vc = pc - eye_position;
 
     const float distance = va.Dot(vn) * -1;
 
-    const float l = vr.Dot(va) * z_near / distance;
-    const float r = vr.Dot(vb) * z_near / distance;
-    const float b = vu.Dot(va) * z_near / distance;
-    const float t = vu.Dot(vc) * z_near / distance;
+    const float near_over_distance = z_near / distance;
+    const float l = vr.Dot(va) * near_over_distance;
+    const float r = vr.Dot(vb) * near_over_distance;
+    const float b = vu.Dot(va) * near_over_distance;
+    const float t = vu.Dot(vc) * near_over_distance;
 
-    return Common::Matrix44::Frustum(l, r, b, t, z_near, z_far);
+    Common::Matrix33 rot = Common::Matrix33::Identity();
+    rot.data[0] = vr.x;
+    rot.data[3] = vr.y;
+    rot.data[6] = vr.z;
+
+    rot.data[1] = vu.x;
+    rot.data[4] = vu.y;
+    rot.data[7] = vu.z;
+
+    rot.data[2] = vn.x;
+    rot.data[5] = vn.y;
+    rot.data[8] = vn.z;
+
+    /*rot.data[0] = vr.x;
+    rot.data[1] = vr.y;
+    rot.data[2] = vr.z;
+
+    rot.data[3] = vu.x;
+    rot.data[4] = vu.y;
+    rot.data[5] = vu.z;
+
+    rot.data[6] = vn.x;
+    rot.data[7] = vn.y;
+    rot.data[8] = vn.z;*/
+
+    return Common::Matrix44::Frustum(l, r, b, t, z_near, z_far) *
+           Common::Matrix44::Translate(
+               Common::Vec3{-m_eye_position.x, -m_eye_position.y, -m_eye_position.z}) *
+           Common::Matrix44::FromMatrix33(rot);
+
+    /*return Common::Matrix44::Frustum(l, r, b, t, z_near, z_far) *
+           Common::Matrix44::FromMatrix33(rot.Inverted());*/
   }
-  Common::Vec3 m_eye_position;
+
+  const float m_projection_window_size = 100.0f;
+  const Common::Vec3 m_initial_frustum_position = Common::Vec3{0, 0, m_projection_window_size};
+  Common::Vec3 m_eye_position = Common::Vec3{0, 0, 0};
   Common::Vec3 m_rotation = Common::Vec3{};
   Common::Quaternion m_rotate_quat = Common::Quaternion::Identity();
 };
