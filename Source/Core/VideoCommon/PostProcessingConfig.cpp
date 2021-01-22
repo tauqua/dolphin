@@ -83,11 +83,13 @@ bool Shader::LoadShader(const std::string& path)
 
   std::string replaced_code = ReplaceAll(std::move(code), "\r\n", "\n");
 
+  m_passes = {};
+  m_options = {};
+
   SplitPath(path, &m_base_path, &m_name, nullptr);
   m_full_path = path;
   const bool result = ParseShader(std::move(replaced_code));
-  if (result)
-    m_runtime_info = std::make_shared<RuntimeInfo>();
+  m_runtime_info = std::make_shared<RuntimeInfo>();
 
   BuildGroupFromOptions();
 
@@ -170,7 +172,7 @@ std::vector<Shader::ConfigBlock> Shader::ReadConfigSections(const std::string& s
       {
         std::string key, value;
         IniFile::ParseLine(line, &key, &value);
-        if (!key.empty() && !value.empty())
+        if (!key.empty())
         {
           if (current_block)
             current_block->values.emplace_back(key, value);
@@ -362,6 +364,7 @@ bool Shader::ParseOptionBlock(const ConfigBlock& block)
 
 bool Shader::ParsePassBlock(const ConfigBlock& block)
 {
+  bool result = true;
   Pass pass;
   for (const auto& option : block.values)
   {
@@ -379,13 +382,13 @@ bool Shader::ParsePassBlock(const ConfigBlock& block)
     {
       TryParse(value, &pass.output_scale);
       if (pass.output_scale <= 0.0f)
-        return false;
+        result = false;
     }
     else if (key == "OutputScaleNative")
     {
       TryParse(value, &pass.output_scale);
       if (pass.output_scale <= 0.0f)
-        return false;
+        result = false;
 
       // negative means native scale
       pass.output_scale = -pass.output_scale;
@@ -396,7 +399,7 @@ bool Shader::ParsePassBlock(const ConfigBlock& block)
       if (dependant_option == m_options.end())
       {
         ERROR_LOG_FMT(VIDEO, "Unknown dependant option: {}", value);
-        return false;
+        result = false;
       }
 
       pass.dependent_option = value;
@@ -409,7 +412,7 @@ bool Shader::ParsePassBlock(const ConfigBlock& block)
       {
         ERROR_LOG_FMT(VIDEO, "Post processing configuration error: Out-of-range texture unit: {}",
                   texture_unit);
-        return false;
+        result = false;
       }
 
       // Input declared yet?
@@ -455,13 +458,13 @@ bool Shader::ParsePassBlock(const ConfigBlock& block)
               input->pass_output_index >= m_passes.size())
           {
             ERROR_LOG_FMT(VIDEO, "Out-of-range render pass reference: {}", input->pass_output_index);
-            return false;
+            result = false;
           }
         }
         else
         {
           ERROR_LOG_FMT(VIDEO, "Invalid input type: {}", value);
-          return false;
+          result = false;
         }
       }
       else if (extra == "Filter")
@@ -481,7 +484,7 @@ bool Shader::ParsePassBlock(const ConfigBlock& block)
         else
         {
           ERROR_LOG_FMT(VIDEO, "Invalid input filter: {}", value);
-          return false;
+          result = false;
         }
       }
       else if (extra == "Mode")
@@ -509,7 +512,7 @@ bool Shader::ParsePassBlock(const ConfigBlock& block)
         else
         {
           ERROR_LOG_FMT(VIDEO, "Invalid input mode: {}", value);
-          return false;
+          result = false;
         }
       }
       else if (extra == "Source")
@@ -528,19 +531,19 @@ bool Shader::ParsePassBlock(const ConfigBlock& block)
         if (!LoadExternalImage(image_path, input->external_image))
         {
           ERROR_LOG_FMT(VIDEO, "Unable to load external image at '{}'", image_path);
-          return false;
+          result = false;
         }
       }
       else
       {
         ERROR_LOG_FMT(VIDEO, "Unknown input key: {}", key);
-        return false;
+        result = false;
       }
     }
   }
 
   m_passes.push_back(std::move(pass));
-  return true;
+  return result;
 }
 
 void Shader::BuildGroupFromOptions()

@@ -137,6 +137,7 @@ bool Instance::CreateInputBinding(u32 shader_index, const Input& input, InputBin
                                      input.external_image.width, input.external_image.data.data(),
                                      input.external_image.width * sizeof(u32) *
                                          input.external_image.height);
+    binding->texture_ptr = binding->owned_texture_ptr.get();
   }
   else if (binding->type == InputType::PassOutput)
   {

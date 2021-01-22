@@ -87,25 +87,6 @@ struct Option final
 
 struct ExternalImage final
 {
-  ExternalImage() = default;
-  ~ExternalImage() = default;
-  ExternalImage(const ExternalImage& other)
-  {
-    std::copy(other.data.begin(), other.data.end(), data.begin());
-    width = other.width;
-    height = other.height;
-  }
-  ExternalImage(ExternalImage&&) = default;
-
-  ExternalImage& operator=(const ExternalImage& other)
-  {
-    std::copy(other.data.begin(), other.data.end(), data.begin());
-    width = other.width;
-    height = other.height;
-    return *this;
-  }
-  ExternalImage& operator=(ExternalImage&&) = default;
-
   std::vector<u8> data;
   u32 width;
   u32 height;
@@ -216,6 +197,8 @@ public:
   void LoadFromSlot(SnapshotSlot slot);
   bool IsSlotSet(SnapshotSlot slot) const;
 
+  static bool LoadExternalImage(const std::string& path, ExternalImage& image);
+
 private:
   // Intermediate block used while parsing.
   struct ConfigBlock final
@@ -223,8 +206,6 @@ private:
     std::string name;
     std::vector<std::pair<std::string, std::string>> values;
   };
-
-  static bool LoadExternalImage(const std::string& path, ExternalImage& image);
 
   bool ParseShader(const std::string& source);
 

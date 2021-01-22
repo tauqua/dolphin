@@ -8,7 +8,7 @@
 #include <QString>
 
 GraphicsColor::GraphicsColor(QWidget* parent, bool supports_alpha)
-    : m_supports_alpha(supports_alpha)
+    : QPushButton(parent), m_supports_alpha(supports_alpha)
 {
   connect(this, SIGNAL(clicked()), this, SLOT(ChangeColor()));
 }

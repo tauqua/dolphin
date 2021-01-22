@@ -1,25 +1,28 @@
-// Copyright 2020 Dolphin Emulator Project
+// Copyright 2021 Dolphin Emulator Project
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #pragma once
 
 #include <QPushButton>
+#include <QFileInfo>
 
-class GraphicsImage : public QPushButton
+class GraphicsImage final : public QPushButton
 {
-    Q_OBJECT
+  Q_OBJECT
 public:
-    GraphicsImage( QWidget* parent );
+  explicit GraphicsImage(QWidget* parent = nullptr);
 
-    const std::string& GetPath() const { return m_path; }
+  std::string GetPath() const { return m_file_info.filePath().toStdString(); }
 
 signals:
-    void PathIsUpdated();
+  void PathIsUpdated();
 public slots:
-    void UpdateImage();
-    void SelectImage();
+  void UpdateImage();
+  void SelectImage();
 
 private:
-    std::string m_path;
+  void dragEnterEvent(QDragEnterEvent* event) override;
+  void dropEvent(QDropEvent* event) override;
+  QFileInfo m_file_info;
 };

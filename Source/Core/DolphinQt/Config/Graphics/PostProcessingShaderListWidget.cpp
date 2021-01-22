@@ -24,6 +24,7 @@
 #include "Core/Core.h"
 
 #include "DolphinQt/Config/Graphics/GraphicsColor.h"
+#include "DolphinQt/Config/Graphics/GraphicsImage.h"
 #include "DolphinQt/Config/Graphics/PostProcessingAddShaderDialog.h"
 #include "DolphinQt/Settings.h"
 
@@ -269,7 +270,7 @@ PostProcessingShaderListWidget::BuildPassesLayout(VideoCommon::PostProcessing::S
       continue;
 
     QGridLayout* pass_layout = new QGridLayout;
-    pass_layout->addWidget(new QLabel(QString::fromStdString(pass.gui_name)), 0, 0);
+    pass_layout->addWidget(new QLabel(QString::fromStdString(pass.gui_name)), 0, 0, 1, 2);
 
     pass_layout->addWidget(new QLabel(QStringLiteral("Scale")), 1, 0);
     auto box = new QDoubleSpinBox;
@@ -287,8 +288,18 @@ PostProcessingShaderListWidget::BuildPassesLayout(VideoCommon::PostProcessing::S
       if (input.type == VideoCommon::PostProcessing::InputType::ExternalImage)
       {
         pass_layout->addWidget(
-            new QLabel(QStringLiteral("Input %i Image Source").arg(input.texture_unit)), input_row,
+            new QLabel(QStringLiteral("Input%1 Image Source").arg(input.texture_unit)), input_row,
             0);
+
+        GraphicsImage* image = new GraphicsImage;
+        connect(image, &GraphicsImage::PathIsUpdated, this, [image, &input, this] {
+          if (VideoCommon::PostProcessing::Shader::LoadExternalImage(image->GetPath(),
+                                                                     input.external_image))
+            GetConfig()->IncrementChangeCount();
+        });
+        pass_layout->addWidget(image, input_row, 1);
+
+        input_row++;
       }
     }
 
