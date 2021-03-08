@@ -629,6 +629,7 @@
     <ClInclude Include="VideoCommon\PixelShaderGen.h" />
     <ClInclude Include="VideoCommon\PixelShaderManager.h" />
     <ClInclude Include="VideoCommon\PostProcessing.h" />
+    <ClInclude Include="VideoCommon\PostProcessingConfig.h" />
     <ClInclude Include="VideoCommon\RenderBase.h" />
     <ClInclude Include="VideoCommon\RenderState.h" />
     <ClInclude Include="VideoCommon\SamplerCommon.h" />
@@ -1179,6 +1180,7 @@
     <ClCompile Include="VideoCommon\PixelShaderGen.cpp" />
     <ClCompile Include="VideoCommon\PixelShaderManager.cpp" />
     <ClCompile Include="VideoCommon\PostProcessing.cpp" />
+    <ClCompile Include="VideoCommon\PostProcessingConfig.cpp" />
     <ClCompile Include="VideoCommon\RenderBase.cpp" />
     <ClCompile Include="VideoCommon\RenderState.cpp" />
     <ClCompile Include="VideoCommon\ShaderCache.cpp" />
