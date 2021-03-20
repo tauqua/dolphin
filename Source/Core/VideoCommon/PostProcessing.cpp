@@ -981,7 +981,7 @@ bool Instance::CompilePipelines()
 
       u32 padding = 0;
       if (remainder != 0)
-        padding = components - remainder;
+        padding = max_components - remainder;
 
       total_components += padding + components;
 
@@ -1167,14 +1167,14 @@ bool System::ApplyDownsample(AbstractFramebuffer* dest_fb,
                                      source_layer);
 }
 
-void System::OnProjectionChanged(u32 type, const Common::Matrix44& projection_mtx)
+void System::OnProjectionChanged(ProjectionType type, const Common::Matrix44& projection_mtx)
 {
   if (m_saw_2d_element && m_projection_state == Perspective)
   {
     m_projection_state = Final;
     ProcessEFB(std::nullopt);
   }
-  if (type == GX_PERSPECTIVE)
+  if (type == ProjectionType::Perspective)
   {
     const float z_near = (projection_mtx.data[11] / (projection_mtx.data[10] - 1));
     const float z_far = (projection_mtx.data[11] / (projection_mtx.data[10] + 1));
@@ -1188,7 +1188,7 @@ void System::OnProjectionChanged(u32 type, const Common::Matrix44& projection_mt
       m_projection_state = Perspective;
     }
   }
-  else if (type == GX_ORTHOGRAPHIC)
+  else if (type == ProjectionType::Orthographic)
   {
     if (m_projection_state == Perspective)
     {

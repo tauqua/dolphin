@@ -17,6 +17,7 @@
 #include "VideoCommon/PostProcessingConfig.h"
 #include "VideoCommon/RenderState.h"
 #include "VideoCommon/TextureConfig.h"
+#include "VideoCommon/XFMemory.h"
 
 class AbstractFramebuffer;
 class AbstractTexture;
@@ -148,7 +149,7 @@ public:
                        const AbstractTexture* source_color_tex,
                        const MathUtil::Rectangle<int>& source_rect, int source_layer);
 
-  void OnProjectionChanged(u32 type, const Common::Matrix44& projection_mtx);
+  void OnProjectionChanged(ProjectionType type, const Common::Matrix44& projection_mtx);
   void OnFrameEnd(std::optional<MathUtil::Rectangle<int>> xfb_rect);
   void OnEFBWritten(const MathUtil::Rectangle<int>& efb_rect);
   void OnOpcodeDrawingStateChanged(bool is_drawing);

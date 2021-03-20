@@ -15,10 +15,10 @@ namespace fs = std::filesystem;
 
 #include <fmt/format.h>
 
-#include "Common/File.h"
 #include "Common/FileUtil.h"
 #include "Common/Image.h"
 #include "Common/IniFile.h"
+#include "common/IOFile.h"
 #include "Common/Logging/Log.h"
 
 #include "VideoCommon/VideoCommon.h"

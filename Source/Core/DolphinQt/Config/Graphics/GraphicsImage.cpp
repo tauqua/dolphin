@@ -61,11 +61,16 @@ void GraphicsImage::dropEvent(QDropEvent* event)
 
   if (!file_info.isFile())
   {
+    ModalMessageBox::critical(this, tr("Error"),
+                              tr("Not a file '%1'").arg(file_info.filePath()));
     return;
   }
 
-  if (file_info.completeSuffix().toLower() != QStringLiteral(".png"))
+  if (file_info.completeSuffix().toLower() != QStringLiteral("png"))
+  {
+    ModalMessageBox::critical(this, tr("Error"), tr("Not a png file '%1'").arg(file_info.filePath()));
     return;
+  }
   m_file_info = file_info;
   UpdateImage();
 }
