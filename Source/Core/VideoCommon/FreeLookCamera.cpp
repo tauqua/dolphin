@@ -15,6 +15,7 @@
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 
+#include "VideoCommon/FreeLookUDPServer.h"
 #include "VideoCommon/VideoCommon.h"
 
 FreeLookCamera g_freelook_camera;
@@ -204,6 +205,61 @@ private:
   Common::Vec3 m_rotation = Common::Vec3{};
   Common::Quaternion m_rotate_quat = Common::Quaternion::Identity();
 };
+
+class UDPController final : public CameraControllerGeneric
+{
+public:
+  Common::Matrix44 GetView() const override
+  {
+    if (m_server)
+      return m_server->GetView();
+    else
+      return Common::Matrix44::Identity();
+  }
+
+  Common::Vec2 GetFieldOfView() const override
+  {
+    if (m_server)
+      return m_server->GetFovMultiplier();
+    else
+      return Common::Vec2{1, 1};
+  }
+
+  void Update() override
+  {
+    if (m_server)
+      m_server->Update();
+  }
+
+  bool IsDirty() const override { return false; };
+  void SetClean() override{};
+
+  void DoState(PointerWrap& p) override
+  {
+    p.Do(m_address);
+    p.Do(m_port);
+
+    if (p.GetMode() == PointerWrap::MODE_READ)
+    {
+      m_server = std::make_unique<FreeLookUDPServer>(m_address, m_port);
+    }
+  }
+
+  void UpdateConfig(const FreeLook::CameraConfig&) override
+  {
+    if (!m_server)
+    {
+      m_address = "127.0.0.1";
+      m_port = 36760;
+      m_server = std::make_unique<FreeLookUDPServer>(m_address, m_port);
+    }
+  }
+
+private:
+  std::string m_address;
+  u16 m_port;
+  std::unique_ptr<FreeLookUDPServer> m_server;
+};
 }  // namespace
 
 Common::Vec2 CameraControllerInput::GetFieldOfView() const
@@ -281,6 +337,10 @@ void FreeLookCamera::SetControlType(FreeLook::ControlType type)
   else if (type == FreeLook::ControlType::FPS)
   {
     m_camera_controller = std::make_unique<FPSController>();
+  }
+  else if (type == FreeLook::ControlType::UDP)
+  {
+    m_camera_controller = std::make_unique<UDPController>();
   }
 
   m_current_type = type;

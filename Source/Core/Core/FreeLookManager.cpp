@@ -202,6 +202,11 @@ void FreeLookController::Update()
   {
     UpdateInput();
   }
+  else
+  {
+    m_last_free_look_rotate_time.reset();
+    static_cast<CameraControllerGeneric*>(camera_controller)->Update();
+  }
 }
 
 void FreeLookController::UpdateInput()
