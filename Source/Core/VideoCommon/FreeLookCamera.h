@@ -33,6 +33,8 @@ public:
   virtual void SetClean() = 0;
 
   virtual bool SupportsInput() const = 0;
+
+  virtual void UpdateConfig(const FreeLook::CameraConfig& config) = 0;
 };
 
 class CameraControllerInput : public CameraController
@@ -46,6 +48,8 @@ public:
   void SetClean() final override { m_dirty = false; }
 
   bool SupportsInput() const final override { return true; }
+
+  void UpdateConfig(const FreeLook::CameraConfig&) final override {}
 
   virtual void MoveVertical(float amt) = 0;
   virtual void MoveHorizontal(float amt) = 0;
@@ -78,7 +82,7 @@ class FreeLookCamera
 {
 public:
   FreeLookCamera();
-  void SetControlType(FreeLook::ControlType type);
+  void UpdateConfig(const FreeLook::CameraConfig& config);
   Common::Matrix44 GetView() const;
   Common::Vec2 GetFieldOfView() const;
 
@@ -89,6 +93,7 @@ public:
   CameraController* GetController() const;
 
 private:
+  void SetControlType(FreeLook::ControlType type);
   bool m_dirty = false;
   std::optional<FreeLook::ControlType> m_current_type;
   std::unique_ptr<CameraController> m_camera_controller;
