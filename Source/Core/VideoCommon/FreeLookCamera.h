@@ -25,7 +25,7 @@ public:
   CameraController& operator=(CameraController&&) = delete;
 
   virtual Common::Matrix44 GetView() const = 0;
-  virtual Common::Vec2 GetFieldOfView() const = 0;
+  virtual Common::Vec2 GetFieldOfViewMultiplier() const = 0;
 
   virtual void DoState(PointerWrap& p) = 0;
 
@@ -38,7 +38,7 @@ public:
 class CameraControllerInput : public CameraController
 {
 public:
-  Common::Vec2 GetFieldOfView() const final override;
+  Common::Vec2 GetFieldOfViewMultiplier() const final override;
 
   void DoState(PointerWrap& p) override;
 
@@ -82,7 +82,7 @@ public:
   FreeLookCamera();
   void SetControlType(FreeLook::ControlType type);
   Common::Matrix44 GetView() const;
-  Common::Vec2 GetFieldOfView() const;
+  Common::Vec2 GetFieldOfViewMultiplier() const;
 
   void DoState(PointerWrap& p);
 
