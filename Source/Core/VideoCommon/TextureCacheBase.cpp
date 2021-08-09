@@ -2293,6 +2293,21 @@ void TextureCacheBase::CopyRenderTargetToTexture(
     }
   }
 
+  if (!is_xfb_copy && entry)
+  {
+    VideoCommon::PE::TriggerParameters parameters;
+    const auto scaled_src_rect = g_renderer->ConvertEFBRectangle(srcRect);
+    const auto framebuffer_rect = g_renderer->ConvertFramebufferRectangle(
+        scaled_src_rect, g_framebuffer_manager->GetEFBFramebuffer());
+    parameters.m_dest_fb = g_framebuffer_manager->GetEFBFramebuffer();
+    parameters.m_dest_rect = g_framebuffer_manager->GetEFBFramebuffer()->GetRect();
+    parameters.m_source_color_tex = g_framebuffer_manager->ResolveEFBColorTexture(framebuffer_rect);
+    parameters.m_source_depth_tex = g_framebuffer_manager->ResolveEFBDepthTexture(framebuffer_rect);
+    parameters.m_source_layer = 0;
+    parameters.m_source_rect = srcRect;
+    g_renderer->GetCustomShaderTriggerManager().OnEFB(parameters);
+  }
+
   // Even if the copy is deferred, still compute the hash. This way if the copy is used as a texture
   // in a subsequent draw before it is flushed, it will have the same hash.
   if (entry)
