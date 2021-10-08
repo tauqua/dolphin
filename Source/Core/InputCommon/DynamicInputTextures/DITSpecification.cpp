@@ -190,6 +190,7 @@ std::optional<Data::HostEntry> GetHostEntry(const picojson::object& entry_obj, s
   const auto path = GetJsonValueFromMap<std::string>(entry_obj, "image", json_file);
   if (!path)
     return std::nullopt;
+
   entry.m_path = offset + *path;
 
   return entry;
@@ -543,7 +544,6 @@ bool ProcessSpecificationV2(picojson::value& root, std::vector<Data>& input_text
     {
       std::string host_device_path = host_controls_path;
       if (arr.is<std::string>())
-      {
         const std::string host_device_full_path = host_controls_path + arr.get<std::string>();
         SplitPath(host_device_full_path, &host_device_path, nullptr, nullptr);
         if (!File::Exists(host_device_full_path))
@@ -576,8 +576,6 @@ bool ProcessSpecificationV2(picojson::value& root, std::vector<Data>& input_text
       }
 
       if (!arr.is<picojson::array>())
-      {
-        ERROR_LOG_FMT(VIDEO,
                       "Failed to load dynamic input json file '{}' because 'host_controls' "
                       "map key '{}' is incorrect type.  Expected array",
                       json_file, host_device);
