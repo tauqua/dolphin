@@ -9,6 +9,7 @@
 #include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
 #include "Core/ConfigManager.h"
+namespace fs = std::filesystem;
 
 namespace
 {
@@ -160,7 +161,7 @@ std::optional<Data::EmulatedEntry> GetEmulatedEntry(const picojson::object& entr
   return std::nullopt;
 }
 
-std::optional<Data::HostEntry> GetHostEntry(const picojson::object& entry_obj,
+std::optional<Data::HostEntry> GetHostEntry(const picojson::object& entry_obj, std::string offset,
                                             std::string json_file)
 {
   const auto keys_json_array = GetJsonValueFromMap<picojson::array>(entry_obj, "keys", json_file);
@@ -189,7 +190,7 @@ std::optional<Data::HostEntry> GetHostEntry(const picojson::object& entry_obj,
   const auto path = GetJsonValueFromMap<std::string>(entry_obj, "image", json_file);
   if (!path)
     return std::nullopt;
-  entry.m_path = *path;
+  entry.m_path = offset + *path;
 
   return entry;
 }
@@ -414,6 +415,7 @@ bool ProcessSpecificationV2(picojson::value& root, std::vector<Data>& input_text
 
   const picojson::value& default_host_controls_json = root.get("default_host_controls");
   picojson::object default_host_controls;
+  std::string host_controls_path = base_path;
   if (default_host_controls_json.is<picojson::object>())
   {
     default_host_controls = default_host_controls_json.get<picojson::object>();
@@ -448,6 +450,7 @@ bool ProcessSpecificationV2(picojson::value& root, std::vector<Data>& input_text
       return false;
     }
     default_host_controls = new_root.get<picojson::object>();
+    SplitPath(default_host_controls_full_path, &host_controls_path, nullptr, nullptr);
   }
 
   const auto output_textures = output_textures_json.get<picojson::object>();
@@ -524,6 +527,7 @@ bool ProcessSpecificationV2(picojson::value& root, std::vector<Data>& input_text
     if (host_controls_json.is<picojson::object>())
     {
       host_controls = host_controls_json.get<picojson::object>();
+      host_controls_path = base_path;
     }
 
     if (host_controls.empty())
@@ -537,10 +541,11 @@ bool ProcessSpecificationV2(picojson::value& root, std::vector<Data>& input_text
 
     for (auto& [host_device, arr] : host_controls)
     {
+      std::string host_device_path = host_controls_path;
       if (arr.is<std::string>())
       {
-        const std::string host_device_full_path =
-            base_path + arr.get<std::string>();
+        const std::string host_device_full_path = host_controls_path + arr.get<std::string>();
+        SplitPath(host_device_full_path, &host_device_path, nullptr, nullptr);
         if (!File::Exists(host_device_full_path))
         {
           ERROR_LOG_FMT(VIDEO,
@@ -591,7 +596,11 @@ bool ProcessSpecificationV2(picojson::value& root, std::vector<Data>& input_text
               json_file, host_device);
           return false;
         }
-        const auto entry = GetHostEntry(entry_json.get<picojson::object>(), json_file);
+        // Account for relative file links
+        fs::path diff = fs::path(host_device_path).lexically_relative(fs::path(base_path));
+
+
+        const auto entry = GetHostEntry(entry_json.get<picojson::object>(), diff.string(), json_file);
         if (!entry)
         {
           return false;
